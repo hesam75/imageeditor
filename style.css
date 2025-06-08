@@ -40,6 +40,7 @@ body {
     overflow: auto; /* Add scrollbars if canvas is too big */
     height: calc(100vh - 40px); /* Adjust based on body padding */
     max-height: 800px; /* Max height for the display area */
+    position: relative; /* Needed for absolute positioning of cropOverlay */
 }
 
 #imageCanvas {
@@ -150,4 +151,63 @@ input[type="file"] {
         width: 100%;
         height: 50vh; /* Adjust height for smaller screens */
     }
+}
+
+/* Crop Overlay Styles */
+.crop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%; /* Cover the image-display-area initially */
+    height: 100%;
+    display: flex; /* Changed to flex for easier centering of cropBox if needed */
+    justify-content: center;
+    align-items: center;
+    /* pointer-events: none; /* Overlay itself should not catch events meant for box */
+}
+
+#cropBox {
+    position: absolute; /* Will be positioned by JS */
+    border: 1px dashed #fff;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* This creates the darkened outside area */
+    cursor: move;
+    /* pointer-events: auto; /* Crop box should catch events */
+}
+
+.resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    background-color: #007bff;
+    border: 1px solid #fff;
+    border-radius: 2px;
+    /* pointer-events: auto; */
+}
+
+.resize-handle.top-left { top: -5px; left: -5px; cursor: nwse-resize; }
+.resize-handle.top-right { top: -5px; right: -5px; cursor: nesw-resize; }
+.resize-handle.bottom-left { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.resize-handle.bottom-right { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.resize-handle.top-center { top: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.resize-handle.bottom-center { bottom: -5px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.resize-handle.left-center { top: 50%; left: -5px; transform: translateY(-50%); cursor: ew-resize; }
+.resize-handle.right-center { top: 50%; right: -5px; transform: translateY(-50%); cursor: ew-resize; }
+
+.crop-box-info {
+    position: absolute;
+    top: 10px; /* Position above the cropBox, adjusted by JS if needed */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0,0,0,0.7);
+    padding: 5px;
+    border-radius: 3px;
+    z-index: 10; /* Above the semi-transparent overlay */
+    /* pointer-events: auto; */
+}
+.crop-box-info button {
+    margin: 0 5px;
+    background-color: #333;
+}
+.crop-box-info button:hover {
+    background-color: #555;
 }

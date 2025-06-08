@@ -29,9 +29,19 @@ export class ImageEditor {
 
         // Crop & Transform controls
         this.cropButton = editorElement.querySelector('#crop');
-        this.rotateLeftButton = editorElement.querySelector('#rotateLeft');
-        this.rotateRightButton = editorElement.querySelector('#rotateRight');
+        // this.rotateLeftButton = editorElement.querySelector('#rotateLeft'); // Removed
+        // this.rotateRightButton = editorElement.querySelector('#rotateRight'); // Removed
+        this.rotationSlider = editorElement.querySelector('#rotation');
+        this.rotationValueDisplay = editorElement.querySelector('#rotationValue');
         this.scaleSlider = editorElement.querySelector('#scale');
+        this.scaleValueDisplay = editorElement.querySelector('#scaleValue');
+
+        // Crop UI elements
+        this.cropOverlay = editorElement.querySelector('#cropOverlay');
+        this.cropBox = editorElement.querySelector('#cropBox');
+        this.confirmCropButton = editorElement.querySelector('#confirmCrop');
+        this.cancelCropButton = editorElement.querySelector('#cancelCrop');
+        this.cropBoxInfo = editorElement.querySelector('.crop-box-info');
 
         // Action Buttons
         this.resetAllButton = editorElement.querySelector('#resetAll');
@@ -53,8 +63,20 @@ export class ImageEditor {
         this.activeFilter = 'default';
         this.currentRotation = 0;
         this.currentScale = 1;
-        this.isCropping = false;
-        this.cropRect = null;
+        // this.isCropping = false; // Now managed by crop UI methods
+        // this.cropRect = null; // Now managed by crop UI methods
+
+        this.isCropping = false; // True when crop UI is active
+        this.cropRect = null;    // { x, y, width, height } defined by user interaction, relative to image-display-area
+        this.cropInteraction = { // State for drag/resize of cropBox
+            active: false,
+            type: null, // 'drag' or 'resize'
+            handle: null, // e.g., 'top-left', 'bottom-right'
+            startX: 0, // clientX of pointerdown
+            startY: 0, // clientY of pointerdown
+            originalRect: null // cropRect at start of interaction
+        };
+
 
         this._init(initialImageSrc);
     }
@@ -94,11 +116,67 @@ export class ImageEditor {
             });
         }
     }
-    _initTransformControls() { /* ... same as before ... */
-        this.rotateLeftButton.addEventListener('click', () => { this.currentRotation = (this.currentRotation - 90) % 360; this.applyAdjustments(); });
-        this.rotateRightButton.addEventListener('click', () => { this.currentRotation = (this.currentRotation + 90) % 360; this.applyAdjustments(); });
-        this.scaleSlider.addEventListener('input', (e) => { this.currentScale = parseInt(e.target.value, 10) / 100; this.applyAdjustments(); });
-        this.cropButton.addEventListener('click', () => { alert("Crop functionality to be fully implemented."); });
+    _initTransformControls() {
+        // Event listeners for rotateLeftButton and rotateRightButton removed.
+        if (this.rotationSlider) {
+            this.rotationSlider.addEventListener('input', (e) => {
+                this.currentRotation = parseInt(e.target.value, 10);
+                if (this.rotationValueDisplay) {
+                    this.rotationValueDisplay.textContent = this.currentRotation;
+                }
+                this.applyAdjustments();
+            });
+        } else {
+            console.warn("Rotation slider not found.");
+        }
+
+        if (this.scaleSlider) {
+            this.scaleSlider.addEventListener('input', (e) => {
+                this.currentScale = parseInt(e.target.value, 10) / 100;
+                if (this.scaleValueDisplay) {
+                    this.scaleValueDisplay.textContent = parseInt(e.target.value, 10);
+                }
+                this.applyAdjustments();
+            });
+        } else {
+            console.warn("Scale slider not found.");
+        }
+
+        if (this.cropButton) {
+            this.cropButton.addEventListener('click', () => {
+                // this.isCropping = !this.isCropping; // old toggle
+                if (!this.isCropping) { // If not currently cropping, start
+                    this._showCropUI();
+                } else { // If already cropping, cancel it
+                    this._hideCropUI();
+                }
+            });
+        } else {
+            console.warn("Crop button not found.");
+        }
+
+        // Add new listeners for confirm/cancel crop
+        if (this.confirmCropButton) {
+            this.confirmCropButton.addEventListener('click', () => {
+                if (this.cropRect && this.cropRect.width > 0 && this.cropRect.height > 0) {
+                    this._applyActualCrop();
+                } else {
+                    console.warn("No valid crop rectangle to apply.");
+                }
+                this._hideCropUI();
+            });
+        } else {
+            console.warn("Confirm crop button not found.");
+        }
+        if (this.cancelCropButton) {
+            this.cancelCropButton.addEventListener('click', () => {
+                this._hideCropUI();
+                this.cropRect = null; // Discard crop rect
+                this.applyAdjustments(); // Redraw to remove any visual artifacts if needed
+            });
+        } else {
+            console.warn("Cancel crop button not found.");
+        }
     }
 
     _initActionButtons() {
@@ -116,11 +194,17 @@ export class ImageEditor {
     }
 
     resetAllStatesAndUI() {
-        this.resetAdjustments(); // Resets all logical states
-        this.resetFinetuneUI();  // Resets finetune sliders
-        this.resetTransformUI(); // Resets transform UI (e.g., scale slider)
-        // No specific UI reset for filters needed beyond activeFilter state being reset.
-        this.applyAdjustments(); // Re-apply (which will draw the original image)
+        this.resetAdjustments();
+        this.resetFinetuneUI();
+        this.resetTransformUI();
+        // If an image is loaded (this.originalImage exists), applyAdjustments will draw it.
+        // If no image is loaded, canvas should be clear.
+        if (this.originalImage) {
+            this.applyAdjustments();
+        } else {
+            // Clear canvas if no image (e.g. after a failed crop or initial state)
+            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
         console.log("All adjustments and UI elements have been reset.");
     }
 
@@ -215,8 +299,19 @@ export class ImageEditor {
         this.claritySlider.value = this.currentClarity; this.vignetteSlider.value = this.currentVignette;
     }
 
-    resetTransformUI() { /* ... same as before ... */
-        this.scaleSlider.value = this.currentScale * 100;
+    resetTransformUI() {
+        if (this.rotationSlider) {
+            this.rotationSlider.value = this.currentRotation;
+        }
+        if (this.rotationValueDisplay) {
+            this.rotationValueDisplay.textContent = this.currentRotation;
+        }
+        if (this.scaleSlider) {
+            this.scaleSlider.value = Math.round(this.currentScale * 100);
+        }
+        if (this.scaleValueDisplay) {
+            this.scaleValueDisplay.textContent = Math.round(this.currentScale * 100);
+        }
     }
 
     applyAdjustments() { /* ... same as before ... */
@@ -266,5 +361,329 @@ export class ImageEditor {
 
         this.ctx.restore();
         // console.log('Adjustments applied.'); // Reduce console noise
+    }
+
+    // New Crop UI Methods
+
+    _showCropUI() {
+        if (!this.originalImage) {
+            alert("Please load an image before cropping.");
+            this.isCropping = false; // Ensure state is correct
+            return;
+        }
+        this.isCropping = true; // Set state
+        this.cropOverlay.style.display = 'block';
+        this.cropButton.textContent = "Cancel Crop";
+
+        const canvasRect = this.canvas.getBoundingClientRect(); // Position of canvas on screen
+        const displayAreaRect = this.editorElement.querySelector('.image-display-area').getBoundingClientRect(); // Parent of canvas
+
+        // Displayed image dimensions on canvas
+        const displayedImgWidth = this.canvas.offsetWidth;
+        const displayedImgHeight = this.canvas.offsetHeight;
+
+        let initialWidth = displayedImgWidth * 0.8;
+        let initialHeight = displayedImgHeight * 0.8;
+
+        // Ensure initial crop box isn't larger than the displayed image
+        if (initialWidth > displayedImgWidth) initialWidth = displayedImgWidth;
+        if (initialHeight > displayedImgHeight) initialHeight = displayedImgHeight;
+
+        // Position cropBox relative to image-display-area (parent of cropOverlay)
+        // canvas.offsetLeft/Top are relative to image-display-area
+        const initialX = this.canvas.offsetLeft + (displayedImgWidth - initialWidth) / 2;
+        const initialY = this.canvas.offsetTop + (displayedImgHeight - initialHeight) / 2;
+
+        this.cropRect = {
+            x: initialX,
+            y: initialY,
+            width: initialWidth,
+            height: initialHeight
+        };
+        this._drawCropBox();
+        this._addCropEventListeners();
+    }
+
+    _hideCropUI() {
+        this.cropOverlay.style.display = 'none';
+        this.cropButton.textContent = "Crop";
+        this.isCropping = false; // Reset state
+        this._removeCropEventListeners();
+    }
+
+    _drawCropBox() {
+        if (!this.cropRect || !this.isCropping) return;
+        this.cropBox.style.left = this.cropRect.x + 'px';
+        this.cropBox.style.top = this.cropRect.y + 'px';
+        this.cropBox.style.width = this.cropRect.width + 'px';
+        this.cropBox.style.height = this.cropRect.height + 'px';
+
+        // Position info box (buttons) above cropBox
+        // Ensure cropBoxInfo is visible and measured before positioning
+        this.cropBoxInfo.style.visibility = 'hidden';
+        this.cropBoxInfo.style.display = 'block'; // Temporarily display to measure
+        const infoHeight = this.cropBoxInfo.offsetHeight;
+        const infoWidth = this.cropBoxInfo.offsetWidth;
+        this.cropBoxInfo.style.display = ''; // Revert
+        this.cropBoxInfo.style.visibility = 'visible';
+
+        let infoTop = this.cropRect.y - infoHeight - 5;
+        // If too high, position below crop box
+        if (infoTop < this.canvas.offsetTop) { // Assuming canvas.offsetTop is the top boundary for crop box
+            infoTop = this.cropRect.y + this.cropRect.height + 5;
+        }
+        this.cropBoxInfo.style.top = infoTop + 'px';
+        this.cropBoxInfo.style.left = (this.cropRect.x + this.cropRect.width / 2 - infoWidth / 2) + 'px';
+    }
+
+    _addCropEventListeners() {
+        this.boundStartCropInteraction = this._startCropInteraction.bind(this);
+        this.boundHandleCropInteraction = this._handleCropInteraction.bind(this);
+        this.boundEndCropInteraction = this._endCropInteraction.bind(this);
+
+        this.cropBox.addEventListener('pointerdown', this.boundStartCropInteraction);
+        // Attach move/up listeners to a larger area to allow dragging outside the box smoothly
+        this.editorElement.querySelector('.image-display-area').addEventListener('pointermove', this.boundHandleCropInteraction);
+        this.editorElement.querySelector('.image-display-area').addEventListener('pointerup', this.boundEndCropInteraction);
+        this.editorElement.querySelector('.image-display-area').addEventListener('pointerleave', this.boundEndCropInteraction);
+    }
+
+    _removeCropEventListeners() {
+        this.cropBox.removeEventListener('pointerdown', this.boundStartCropInteraction);
+        this.editorElement.querySelector('.image-display-area').removeEventListener('pointermove', this.boundHandleCropInteraction);
+        this.editorElement.querySelector('.image-display-area').removeEventListener('pointerup', this.boundEndCropInteraction);
+        this.editorElement.querySelector('.image-display-area').removeEventListener('pointerleave', this.boundEndCropInteraction);
+    }
+
+    _startCropInteraction(e) {
+        if (!this.isCropping) return;
+        // e.preventDefault(); // Prevent default actions like text selection if issues arise
+        e.stopPropagation(); // Stop event from bubbling to other elements
+
+        this.cropInteraction.active = true;
+        // Use clientX/clientY for screen coordinates, consistent across events
+        this.cropInteraction.startX = e.clientX;
+        this.cropInteraction.startY = e.clientY;
+        this.cropInteraction.originalRect = { ...this.cropRect }; // Shallow copy
+
+        const target = e.target;
+        if (target.classList.contains('resize-handle')) {
+            this.cropInteraction.type = 'resize';
+            // Get the specific handle, e.g., 'top-left'
+            this.cropInteraction.handle = Array.from(target.classList).find(cls => cls !== 'resize-handle' && cls !== '');
+        } else if (target === this.cropBox) {
+            this.cropInteraction.type = 'drag';
+        } else {
+            // Clicked on something else (e.g. crop-box-info buttons), don't start interaction
+            this.cropInteraction.active = false;
+            return;
+        }
+        document.body.style.cursor = getComputedStyle(e.target).cursor || 'default';
+    }
+
+    _handleCropInteraction(e) {
+        if (!this.isCropping || !this.cropInteraction.active) return;
+        // e.preventDefault(); // Prevent default actions if needed
+
+        const dx = e.clientX - this.cropInteraction.startX;
+        const dy = e.clientY - this.cropInteraction.startY;
+
+        let newRect = { ...this.cropInteraction.originalRect }; // Work on a copy
+
+        if (this.cropInteraction.type === 'drag') {
+            newRect.x += dx;
+            newRect.y += dy;
+        } else if (this.cropInteraction.type === 'resize' && this.cropInteraction.handle) {
+            const handle = this.cropInteraction.handle;
+            if (handle.includes('right')) newRect.width += dx;
+            if (handle.includes('left')) {
+                newRect.x += dx;
+                newRect.width -= dx;
+            }
+            if (handle.includes('bottom')) newRect.height += dy;
+            if (handle.includes('top')) {
+                newRect.y += dy;
+                newRect.height -= dy;
+            }
+
+            // Handle width/height potentially becoming negative if dragged too far
+            if (newRect.width < 0) {
+                if (handle.includes('left')) newRect.x = this.cropInteraction.originalRect.x + this.cropInteraction.originalRect.width;
+                newRect.width = Math.abs(newRect.width);
+            }
+            if (newRect.height < 0) {
+                if (handle.includes('top')) newRect.y = this.cropInteraction.originalRect.y + this.cropInteraction.originalRect.height;
+                newRect.height = Math.abs(newRect.height);
+            }
+
+            // Enforce minimum size
+            const minSize = 20;
+            if (newRect.width < minSize) {
+                if (handle.includes('left')) newRect.x = this.cropInteraction.originalRect.x + this.cropInteraction.originalRect.width - minSize;
+                newRect.width = minSize;
+            }
+            if (newRect.height < minSize) {
+                 if (handle.includes('top')) newRect.y = this.cropInteraction.originalRect.y + this.cropInteraction.originalRect.height - minSize;
+                newRect.height = minSize;
+            }
+        }
+
+        // Boundary checks: ensure cropRect stays visually within the canvas element.
+        const canvasVisualX = this.canvas.offsetLeft;
+        const canvasVisualY = this.canvas.offsetTop;
+        const canvasVisualWidth = this.canvas.offsetWidth;
+        const canvasVisualHeight = this.canvas.offsetHeight;
+
+        // Clamp X and Y
+        newRect.x = Math.max(canvasVisualX, Math.min(newRect.x, canvasVisualX + canvasVisualWidth - newRect.width));
+        newRect.y = Math.max(canvasVisualY, Math.min(newRect.y, canvasVisualY + canvasVisualHeight - newRect.height));
+
+        // Clamp width and height (if dragging made it exceed boundaries)
+        newRect.width = Math.min(newRect.width, canvasVisualX + canvasVisualWidth - newRect.x);
+        newRect.height = Math.min(newRect.height, canvasVisualY + canvasVisualHeight - newRect.y);
+
+
+        this.cropRect = newRect;
+        this._drawCropBox();
+    }
+
+    _endCropInteraction(e) {
+        if (!this.cropInteraction.active) return;
+        this.cropInteraction.active = false;
+        // Type and handle are not reset here to allow _applyActualCrop to know last state if needed
+        document.body.style.cursor = 'default';
+        console.log("Updated cropRect (display coords relative to image-display-area):", this.cropRect);
+    }
+
+    async _applyActualCrop() {
+        if (!this.originalImage || !this.cropRect) {
+            console.error("Cannot apply crop: Missing original image or crop rectangle.");
+            return;
+        }
+
+        // this.cropRect is in coordinates relative to the .image-display-area,
+        // and its dimensions are for the visually displayed crop box.
+        // this.canvas has the current displayed image (scaled, rotated).
+        // this.canvas.offsetLeft, .offsetTop are relative to .image-display-area.
+
+        // 1. Normalize cropRect coordinates to be relative to the displayed canvas itself.
+        const cropX_on_canvas = this.cropRect.x - this.canvas.offsetLeft;
+        const cropY_on_canvas = this.cropRect.y - this.canvas.offsetTop;
+        const cropWidth_on_canvas = this.cropRect.width;
+        const cropHeight_on_canvas = this.cropRect.height;
+
+        // 2. Convert these canvas-display-relative coordinates to coordinates on the
+        //    source image (this.currentImageData, which has filters/finetunes but no display transform).
+        //    This needs to account for this.currentScale and this.currentRotation.
+
+        //    The center of rotation/scaling on the display canvas is its own center.
+        const displayedCanvasCenterX = this.canvas.width / 2;
+        const displayedCanvasCenterY = this.canvas.height / 2;
+
+        //    The source of this.canvas's content is currentImageData, drawn centered.
+        const sourceImageWidth = this.currentImageData.width; // before display scale
+        const sourceImageHeight = this.currentImageData.height; // before display scale
+
+        //    Iterate over the 4 corners of the crop box on the displayed canvas
+        const pointsOnCanvas = [
+            { x: cropX_on_canvas, y: cropY_on_canvas },                                           // Top-left
+            { x: cropX_on_canvas + cropWidth_on_canvas, y: cropY_on_canvas },                     // Top-right
+            { x: cropX_on_canvas, y: cropY_on_canvas + cropHeight_on_canvas },                     // Bottom-left
+            { x: cropX_on_canvas + cropWidth_on_canvas, y: cropY_on_canvas + cropHeight_on_canvas } // Bottom-right
+        ];
+
+        const pointsOnSourceImage = pointsOnCanvas.map(p => {
+            // Translate point relative to displayed canvas center
+            let x = p.x - displayedCanvasCenterX;
+            let y = p.y - displayedCanvasCenterY;
+
+            // Reverse scaling
+            x /= this.currentScale;
+            y /= this.currentScale;
+
+            // Reverse rotation (rotate by -currentRotation)
+            const rad = -this.currentRotation * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            let rotX = x * cos - y * sin;
+            let rotY = x * sin + y * cos;
+
+            // Translate point relative to source image center (which was drawn at canvas center)
+            rotX += sourceImageWidth / 2;
+            rotY += sourceImageHeight / 2;
+
+            return { x: rotX, y: rotY };
+        });
+
+        // Determine the bounding box of these transformed points on the source image
+        const minX = Math.min(...pointsOnSourceImage.map(p => p.x));
+        const maxX = Math.max(...pointsOnSourceImage.map(p => p.x));
+        const minY = Math.min(...pointsOnSourceImage.map(p => p.y));
+        const maxY = Math.max(...pointsOnSourceImage.map(p => p.y));
+
+        const sourceCropRect = {
+            x: Math.max(0, Math.floor(minX)),
+            y: Math.max(0, Math.floor(minY)),
+            width: Math.min(sourceImageWidth, Math.ceil(maxX - minX)),
+            height: Math.min(sourceImageHeight, Math.ceil(maxY - minY))
+        };
+
+        // Ensure width and height are positive
+        if (sourceCropRect.width <= 0 || sourceCropRect.height <= 0) {
+            console.error("Calculated crop dimensions are invalid:", sourceCropRect);
+            alert("Could not apply crop due to invalid dimensions after transformation. Try a different crop area.");
+            return;
+        }
+
+        console.log("Original Image Dimensions:", this.originalImage.width, "x", this.originalImage.height);
+        console.log("Source Crop Rect (on originalImage):", sourceCropRect);
+
+        // 3. Apply this sourceCropRect to the *original* image data.
+        //    We need to do this because all filters/finetunes are reapplied from originalImage.
+        const newOriginalImageData = cropImage(this.originalImage, sourceCropRect);
+
+        if (!newOriginalImageData || newOriginalImageData.width === 0 || newOriginalImageData.height === 0) {
+            console.error("Cropping originalImage resulted in invalid data.");
+            alert("Failed to crop the image. The resulting image would be empty.");
+            return;
+        }
+
+        this.originalImage = newOriginalImageData; // Update the base original image
+
+        // Create a new Image object from the cropped original ImageData to update dimensions and preview
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = this.originalImage.width;
+        tempCanvas.height = this.originalImage.height;
+        tempCanvas.getContext('2d').putImageData(this.originalImage, 0, 0);
+
+        // This effectively reloads the image editor with the cropped image as the new base
+        // Preserve the original image src if it was a URL, otherwise use dataURL.
+        // For simplicity, we'll use a dataURL to represent the new state.
+        const dataURL = tempCanvas.toDataURL();
+
+        // Reset all adjustments and UI to reflect the new base image
+        this.image.onload = () => {
+            // The this.image is now the new cropped base image.
+            // Need to re-capture its ImageData as the new originalImage.
+            this.canvas.width = this.image.naturalWidth;
+            this.canvas.height = this.image.naturalHeight;
+            this.ctx.drawImage(this.image, 0, 0, this.image.naturalWidth, this.image.naturalHeight);
+            this.originalImage = this.ctx.getImageData(0, 0, this.image.naturalWidth, this.image.naturalHeight);
+
+            this.resetAllStatesAndUI(); // This will call applyAdjustments internally
+
+            // Important: clear the onload handler to prevent it from running again on subsequent adjustments
+            this.image.onload = null;
+            URL.revokeObjectURL(dataURL); // Clean up if it was an object URL, though toDataURL isn't
+        };
+        this.image.onerror = () => {
+            alert("Error reloading cropped image.");
+            // Potentially try to restore previous originalImage if backup was made
+            this.image.onerror = null;
+        };
+        this.image.src = dataURL; // Load the new cropped image
+
+        this.cropRect = null; // Clear the crop rectangle
+        console.log("Crop applied successfully. Image reloaded with new dimensions.");
     }
 }
