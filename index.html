@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Editor</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="editor-container">
+        <div class="controls-panel">
+            <div class="upload-section">
+                <label for="imageUpload" class="custom-file-upload">Upload Image</label>
+                <input type="file" id="imageUpload" accept="image/*">
+            </div>
+
+            <div class="finetune-section">
+                <h3>Finetune</h3>
+                <div><label for="brightness">Brightness</label><input type="range" id="brightness" min="0" max="200" value="100"></div>
+                <div><label for="contrast">Contrast</label><input type="range" id="contrast" min="0" max="200" value="100"></div>
+                <div><label for="saturation">Saturation</label><input type="range" id="saturation" min="0" max="200" value="100"></div>
+                <div><label for="exposure">Exposure</label><input type="range" id="exposure" min="0" max="200" value="100"></div>
+                <div><label for="temperature">Temperature</label><input type="range" id="temperature" min="-100" max="100" value="0"></div>
+                <div><label for="gamma">Gamma</label><input type="range" id="gamma" min="1" max="220" value="100"> <!-- Assuming 0.01 to 2.2, scaled by 100 --></div>
+                <div><label for="clarity">Clarity</label><input type="range" id="clarity" min="0" max="100" value="0"></div>
+                <div><label for="vignette">Vignette</label><input type="range" id="vignette" min="0" max="100" value="0"></div>
+            </div>
+
+            <div class="filter-section">
+                <h3>Filters</h3>
+                <button data-filter="default">Default</button>
+                <button data-filter="classic">Classic</button>
+                <button data-filter="chrome">Chrome</button>
+                <button data-filter="fade">Fade</button>
+                <button data-filter="cold">Cold</button>
+                <button data-filter="warm">Warm</button>
+                <button data-filter="pastel">Pastel</button>
+                <button data-filter="monochrome">Monochrome</button>
+                <button data-filter="mono">Mono</button>
+                <button data-filter="noir">Noir</button>
+                <button data-filter="stark">Stark</button>
+                <button data-filter="wash">Wash</button>
+                <button data-filter="sepia">Sepia</button>
+                <button data-filter="rust">Rust</button>
+                <button data-filter="blues">Blues</button>
+                <button data-filter="color">Color</button>
+                <!-- Add more filter buttons as needed -->
+            </div>
+
+            <div class="crop-section">
+                <h3>Crop & Transform</h3>
+                <button id="crop">Crop</button>
+                <button id="rotateLeft">Rotate Left</button>
+                <button id="rotateRight">Rotate Right</button>
+                <div><label for="scale">Scale</label><input type="range" id="scale" min="10" max="200" value="100"></div>
+            </div>
+            <div class="action-buttons">
+                <button id="resetAll">Reset All</button>
+                <button id="download">Download Image</button>
+            </div>
+        </div>
+
+        <div class="image-display-area">
+            <canvas id="imageCanvas"></canvas>
+        </div>
+    </div>
+
+    <script type="module" src="main.js"></script>
+</body>
+</html>
