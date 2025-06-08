@@ -332,14 +332,13 @@ export class ImageEditor {
         clampImageData(workingImageData);
         this.currentImageData = workingImageData;
 
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        this.ctx.save();
-
+        // Create a temporary canvas to hold the currentImageData (which has filters/finetunes applied)
         let sourceCanvas = document.createElement('canvas');
         sourceCanvas.width = this.currentImageData.width;
         sourceCanvas.height = this.currentImageData.height;
         sourceCanvas.getContext('2d').putImageData(this.currentImageData, 0, 0);
 
+        // Calculate the new canvas dimensions needed to display the scaled and rotated image.
         const radRotation = this.currentRotation * Math.PI / 180;
         const absCos = Math.abs(Math.cos(radRotation));
         const absSin = Math.abs(Math.sin(radRotation));
@@ -350,17 +349,31 @@ export class ImageEditor {
         const displayCanvasWidth = scaledSourceWidth * absCos + scaledSourceHeight * absSin;
         const displayCanvasHeight = scaledSourceWidth * absSin + scaledSourceHeight * absCos;
 
+        // Set final canvas dimensions for the main display canvas
         this.canvas.width = displayCanvasWidth;
         this.canvas.height = displayCanvasHeight;
 
+        // Clear the main display canvas using its new, correct dimensions
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Save context state before applying transformations for drawing
+        this.ctx.save();
+
+        // Translate to the center of the display canvas, rotate, then draw the sourceCanvas
         this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
         this.ctx.rotate(radRotation);
-        this.ctx.scale(this.currentScale, this.currentScale);
+        this.ctx.scale(this.currentScale, this.currentScale); // Scale is applied here before drawing
 
-        this.ctx.drawImage(sourceCanvas, -sourceCanvas.width / 2, -sourceCanvas.height / 2, sourceCanvas.width, sourceCanvas.height);
+        this.ctx.drawImage(
+            sourceCanvas,
+            -sourceCanvas.width / 2, // Draw centered around its own origin
+            -sourceCanvas.height / 2,
+            sourceCanvas.width,
+            sourceCanvas.height
+        );
 
         this.ctx.restore();
-        // console.log('Adjustments applied.'); // Reduce console noise
+        // console.log('Adjustments applied.');
     }
 
     // New Crop UI Methods
