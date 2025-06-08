@@ -50,9 +50,14 @@
             <div class="crop-section">
                 <h3>Crop & Transform</h3>
                 <button id="crop">Crop</button>
-                <button id="rotateLeft">Rotate Left</button>
-                <button id="rotateRight">Rotate Right</button>
-                <div><label for="scale">Scale</label><input type="range" id="scale" min="10" max="200" value="100"></div>
+                <div>
+                    <label for="rotation">Rotation: <span id="rotationValue">0</span>°</label>
+                    <input type="range" id="rotation" min="0" max="360" value="0">
+                </div>
+                <div>
+                    <label for="scale">Scale: <span id="scaleValue">100</span>%</label>
+                    <input type="range" id="scale" min="10" max="200" value="100">
+                </div>
             </div>
             <div class="action-buttons">
                 <button id="resetAll">Reset All</button>
@@ -62,6 +67,22 @@
 
         <div class="image-display-area">
             <canvas id="imageCanvas"></canvas>
+            <div id="cropOverlay" class="crop-overlay" style="display: none;">
+                <div class="crop-box-info">
+                    <button id="confirmCrop">OK</button>
+                    <button id="cancelCrop">Cancel</button>
+                </div>
+                <div id="cropBox" class="crop-box">
+                    <div class="resize-handle top-left"></div>
+                    <div class="resize-handle top-right"></div>
+                    <div class="resize-handle bottom-left"></div>
+                    <div class="resize-handle bottom-right"></div>
+                    <div class="resize-handle top-center"></div>
+                    <div class="resize-handle bottom-center"></div>
+                    <div class="resize-handle left-center"></div>
+                    <div class="resize-handle right-center"></div>
+                </div>
+            </div>
         </div>
     </div>
 
